@@ -18,6 +18,7 @@ import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.RequiresApi
+import androidx.appcompat.widget.SearchView
 import androidx.lifecycle.MutableLiveData
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -71,7 +72,7 @@ class RecyclerAdapterStickerList(private val act: MainActivity) :
         holder.name.text = s.name
         holder.id.text = s.id
         holder.syncState.text =
-            "同步 ${s.syncedState.all}-l${s.syncedState.lowQuality}-h${s.syncedState.highQuality} / 缓存 ${stickerList[position].remoteState.all}-l${s.remoteState.lowQuality}-h${s.remoteState.highQuality} / 总 ${s.all}"
+            "同步 ${s.syncedState.all}-l${s.syncedState.lowQuality}-h${s.syncedState.highQuality}\n缓存 ${stickerList[position].remoteState.all}-l${s.remoteState.lowQuality}-h${s.remoteState.highQuality}\n总 ${s.all}"
         holder.syncBtn.setOnClickListener {
             val pd = ProgressDialog(act)
             pd.setMessage("正在同步")
@@ -214,10 +215,10 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         refreshModuleStatus()
         requestPermission()
         binding.mainTextVersion.text = getString(R.string.module_version, BuildConfig.VERSION_NAME)
-        binding.button2.setOnClickListener {
-            binding.tips.visibility = View.GONE
-            binding.manage.visibility = View.VISIBLE
-        }
+        // binding.button2.setOnClickListener {
+        //     binding.tips.visibility = View.GONE
+        //     binding.manage.visibility = View.VISIBLE
+        // }
 
         binding.resetBtn.setOnClickListener {
             AlertDialog.Builder(this)
@@ -261,9 +262,29 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         binding.stickerManageView.layoutManager = LinearLayoutManager(this)
         binding.stickerManageView.adapter = RecyclerAdapterStickerList(this)
 
+        binding.searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
+            override fun onQueryTextSubmit(query: String?): Boolean {
+                searchText.postValue(query)
+                return false
+            }
+
+            override fun onQueryTextChange(newText: String?): Boolean {
+                searchText.postValue(newText)
+                return false
+            }
+        })
+
         stickerList.observe(this) {
             runOnUiThread {
-                (binding.stickerManageView.adapter as RecyclerAdapterStickerList).stickerList = it
+                (binding.stickerManageView.adapter as RecyclerAdapterStickerList).stickerList =
+                    it.filter { search(it, searchText.value ?: "") }
+                binding.stickerManageView.adapter?.notifyDataSetChanged()
+            }
+        }
+        searchText.observe(this) { str ->
+            runOnUiThread {
+                (binding.stickerManageView.adapter as RecyclerAdapterStickerList).stickerList =
+                    stickerList.value?.filter { search(it, str) } ?: listOf()
                 binding.stickerManageView.adapter?.notifyDataSetChanged()
             }
         }
@@ -276,6 +297,14 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
 
     private val stickerList by lazy {
         MutableLiveData<List<StickerInfo>>(listOf())
+    }
+
+    private val searchText by lazy {
+        MutableLiveData("")
+    }
+
+    private fun search(item: StickerInfo, text: String): Boolean {
+        return item.name.contains(text, true) || item.id.contains(text, true)
     }
 
     fun updateStickerList() {
